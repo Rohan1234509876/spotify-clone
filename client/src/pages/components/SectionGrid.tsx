@@ -1,16 +1,15 @@
 import { Song } from "@/types";
 
 import { Button } from "@/components/ui/button";
-import SectionGridSkeleton from "@/components/skeletons/SectionGridSkeleton";
-
+import PlayButton from "./PlayButton";
 
 type SectionGridProps = {
 	title: string;
 	songs: Song[];
 	isLoading: boolean;
 };
-const SectionGrid = ({ songs, title, isLoading }: SectionGridProps) => {
-	if (isLoading) return <SectionGridSkeleton />;
+const SectionGrid = ({ songs, title }: SectionGridProps) => {
+	
 
 	return (
 		<div className='mb-8'>
@@ -36,7 +35,7 @@ const SectionGrid = ({ songs, title, isLoading }: SectionGridProps) => {
 									group-hover:scale-105'
 								/>
 							</div>
-							
+							<PlayButton song={song} />
 						</div>
 						<h3 className='font-medium mb-2 truncate'>{song.title}</h3>
 						<p className='text-sm text-zinc-400 truncate'>{song.artist}</p>

@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { Song } from "@/types";
-import { useChatStore } from "./useChatStore";
+
 
 interface PlayerStore {
 	currentSong: Song | null;
@@ -62,7 +62,7 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
 	togglePlay: () => {
 		const willStartPlaying = !get().isPlaying;
 
-		const currentSong = get().currentSong;
+		
 		
 		
 

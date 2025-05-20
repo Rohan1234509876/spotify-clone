@@ -4,10 +4,10 @@ import { useChatStore } from '@/stores/useChatStore';
 import { useUser } from '@clerk/clerk-react';
 
 import { HeadphonesIcon, Music, Users } from 'lucide-react';
-import React, { useEffect } from 'react'
+import  { useEffect } from 'react'
 
 const FriendsActivity = () => {
-	const {users, fetchUsers, isLoading, error} = useChatStore();
+	const {users, fetchUsers} = useChatStore();
 	const {user} = useUser();
 
 	useEffect(() => {
