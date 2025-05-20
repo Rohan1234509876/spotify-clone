@@ -1,6 +1,6 @@
 import express from "express";
 import dotenv from "dotenv";
-import { clerkMiddleware } from "@clerk/express";
+// import { clerkMiddleware } from "@clerk/express";
 import fs from "fs";
 import fileupload from "express-fileupload";
 import path from "path";
@@ -16,16 +16,16 @@ import statRoutes from "./routes/stat.route.js";
 import songRoutes from "./routes/song.route.js";
 import { connectDB } from "./lib/db.js";
 
-// 1) Load environment variables
+// 1) Load env
 dotenv.config();
 
-// 2) ESM-compatible __dirname
+// 2) ESM __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// 3) CORS configuration
+// 3) CORS
 app.use(
   cors({
     origin:
@@ -36,18 +36,14 @@ app.use(
   })
 );
 
-// 4) Parse JSON and URL-encoded requests
+// 4) Body parsing
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 5) Clerk middleware, scoped only to /api routes
-app.use(
-  "/api",
-  clerkMiddleware({ debug: false })
-);
-console.log("Clerk middleware initialized on /api");
+// 5) (Removed global Clerk middleware - causes path-to-regexp crash)
+// app.use(clerkMiddleware({ debug: false }));
 
-// 6) File upload configuration
+// 6) File uploads
 app.use(
   fileupload({
     useTempFiles: true,
@@ -57,22 +53,16 @@ app.use(
   })
 );
 
-// 7) Scheduled cleanup of temp files every hour
+// 7) Cleanup cron
 cron.schedule("0 * * * *", async () => {
   const tempDir = path.join(__dirname, "tmp");
-  try {
-    if (fs.existsSync(tempDir)) {
-      const files = await fs.promises.readdir(tempDir);
-      await Promise.all(
-        files.map((f) => fs.promises.unlink(path.join(tempDir, f)))
-      );
-    }
-  } catch (err) {
-    console.error("Temp cleanup error:", err);
-  }
+  if (!fs.existsSync(tempDir)) return;
+  const files = await fs.promises.readdir(tempDir);
+  await Promise.all(files.map((f) => fs.promises.unlink(path.join(tempDir, f))));
 });
 
-// 8) Mount application routes
+// 8) Mount your routers
+// (Each route handler should manually verify the Clerk token if needed)
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/admin", adminRoutes);
@@ -80,7 +70,7 @@ app.use("/api/albums", albumRoutes);
 app.use("/api/stats", statRoutes);
 app.use("/api/songs", songRoutes);
 
-// 9) Serve client build in production
+// 9) Serve static in production
 if (process.env.NODE_ENV === "production") {
   app.use(express.static(path.join(__dirname, "../client/dist")));
   app.get("*", (req, res) => {
@@ -100,13 +90,13 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 11) Connect to DB and start server
+// 11) Start
 ;(async () => {
   try {
     await connectDB();
     const port = process.env.PORT || 8000;
     app.listen(port, () => {
-      console.log(`Server running on port ${port}`);
+      console.log(`Server listening on ${port}`);
     });
   } catch (err) {
     console.error("Startup failed:", err);
