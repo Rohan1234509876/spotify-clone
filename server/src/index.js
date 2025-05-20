@@ -40,7 +40,7 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 5) (Removed global Clerk middleware - causes path-to-regexp crash)
+// 5) (Global Clerk middleware disabled to avoid path-to-regexp issues))
 // app.use(clerkMiddleware({ debug: false }));
 
 // 6) File uploads
@@ -53,7 +53,7 @@ app.use(
   })
 );
 
-// 7) Cleanup cron
+// 7) Cron cleanup
 cron.schedule("0 * * * *", async () => {
   const tempDir = path.join(__dirname, "tmp");
   if (!fs.existsSync(tempDir)) return;
@@ -61,16 +61,26 @@ cron.schedule("0 * * * *", async () => {
   await Promise.all(files.map((f) => fs.promises.unlink(path.join(tempDir, f))));
 });
 
-// 8) Mount your routers
-// (Each route handler should manually verify the Clerk token if needed)
-app.use("/api/auth", authRoutes);
-app.use("/api/users", userRoutes);
-app.use("/api/admin", adminRoutes);
-app.use("/api/albums", albumRoutes);
-app.use("/api/stats", statRoutes);
-app.use("/api/songs", songRoutes);
+// 8) Mount routers with isolated try/catch
+const mounts = [
+  ["/api/auth", authRoutes],
+  ["/api/users", userRoutes],
+  ["/api/admin", adminRoutes],
+  ["/api/albums", albumRoutes],
+  ["/api/stats", statRoutes],
+  ["/api/songs", songRoutes],
+];
 
-// 9) Serve static in production
+mounts.forEach(([routePath, routerModule]) => {
+  try {
+    app.use(routePath, routerModule);
+    console.log(`Mounted ${routePath}`);
+  } catch (err) {
+    console.error(`Error mounting ${routePath}:`, err);
+  }
+});
+
+// 9) Serve client in production
 if (process.env.NODE_ENV === "production") {
   app.use(express.static(path.join(__dirname, "../client/dist")));
   app.get("*", (req, res) => {
@@ -90,7 +100,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 11) Start
+// 11) Connect DB & start
 ;(async () => {
   try {
     await connectDB();
