@@ -1,6 +1,6 @@
 import express from "express";
 import dotenv from "dotenv";
-// import { clerkMiddleware } from "@clerk/express";
+// Clerk Express middleware removed to avoid debug-route conflict
 import fs from "fs";
 import fileupload from "express-fileupload";
 import path from "path";
@@ -16,34 +16,29 @@ import statRoutes from "./routes/stat.route.js";
 import songRoutes from "./routes/song.route.js";
 import { connectDB } from "./lib/db.js";
 
-// 1) Load env
 dotenv.config();
 
-// 2) ESM __dirname
+// ESM-compatible __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// 3) CORS
+// CORS configuration
 app.use(
   cors({
-    origin:
-      process.env.NODE_ENV === "development"
-        ? "http://localhost:3000"
-        : process.env.PRODUCTION_URL,
+    origin: process.env.NODE_ENV === "development"
+      ? "http://localhost:3000"
+      : process.env.PRODUCTION_URL,
     credentials: true,
   })
 );
 
-// 4) Body parsing
+// Body parsing
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 5) (Global Clerk middleware disabled to avoid path-to-regexp issues))
-// app.use(clerkMiddleware({ debug: false }));
-
-// 6) File uploads
+// File upload configuration
 app.use(
   fileupload({
     useTempFiles: true,
@@ -53,34 +48,30 @@ app.use(
   })
 );
 
-// 7) Cron cleanup
+// Scheduled cleanup of temp files every hour
 cron.schedule("0 * * * *", async () => {
   const tempDir = path.join(__dirname, "tmp");
-  if (!fs.existsSync(tempDir)) return;
-  const files = await fs.promises.readdir(tempDir);
-  await Promise.all(files.map((f) => fs.promises.unlink(path.join(tempDir, f))));
-});
-
-// 8) Mount routers with isolated try/catch
-const mounts = [
-  ["/api/auth", authRoutes],
-  ["/api/users", userRoutes],
-  ["/api/admin", adminRoutes],
-  ["/api/albums", albumRoutes],
-  ["/api/stats", statRoutes],
-  ["/api/songs", songRoutes],
-];
-
-mounts.forEach(([routePath, routerModule]) => {
   try {
-    app.use(routePath, routerModule);
-    console.log(`Mounted ${routePath}`);
+    if (fs.existsSync(tempDir)) {
+      const files = await fs.promises.readdir(tempDir);
+      await Promise.all(
+        files.map((file) => fs.promises.unlink(path.join(tempDir, file)))
+      );
+    }
   } catch (err) {
-    console.error(`Error mounting ${routePath}:`, err);
+    console.error("Temp cleanup error:", err);
   }
 });
 
-// 9) Serve client in production
+// Mount application routes
+app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/albums", albumRoutes);
+app.use("/api/stats", statRoutes);
+app.use("/api/songs", songRoutes);
+
+// Serve client build in production
 if (process.env.NODE_ENV === "production") {
   app.use(express.static(path.join(__dirname, "../client/dist")));
   app.get("*", (req, res) => {
@@ -88,7 +79,7 @@ if (process.env.NODE_ENV === "production") {
   });
 }
 
-// 10) Global error handler
+// Global error handler
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err);
   res.status(500).json({
@@ -100,8 +91,8 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 11) Connect DB & start
-;(async () => {
+// Connect to DB and start server
+(async () => {
   try {
     await connectDB();
     const port = process.env.PORT || 8000;
