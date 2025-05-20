@@ -8,119 +8,108 @@ import { fileURLToPath } from "url";
 import cors from "cors";
 import cron from "node-cron";
 
-// Initialize environment
+import authRoutes from "./routes/auth.route.js";
+import userRoutes from "./routes/user.route.js";
+import adminRoutes from "./routes/admin.route.js";
+import albumRoutes from "./routes/album.route.js";
+import statRoutes from "./routes/stat.route.js";
+import songRoutes from "./routes/song.route.js";
+import { connectDB } from "./lib/db.js";
+
+// Load environment variables
 dotenv.config();
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+
+// ESM-friendly __dirname
+typeof __dirname === 'undefined' && (() => {
+  const __filename = fileURLToPath(import.meta.url);
+  global.__dirname = path.dirname(__filename);
+})();
 
 const app = express();
 
-// 1. Basic Middleware (CORS first)
+// CORS configuration
 app.use(cors({
-    origin: process.env.NODE_ENV === 'development' 
-        ? 'http://localhost:3000' 
-        : process.env.PRODUCTION_URL,
-    credentials: true
+  origin: process.env.NODE_ENV === 'development'
+    ? 'http://localhost:3000'
+    : process.env.PRODUCTION_URL,
+  credentials: true
 }));
 
+// Parse JSON and URL-encoded bodies
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 2. Safe Clerk Middleware Implementation
-try {
-    const clerkConfig = {
-        debug: false,
-        // Disable path-to-regexp internal parsing
-        pathRegexOptions: null  
-    };
-    app.use(clerkMiddleware(clerkConfig));
-    console.log("Clerk middleware initialized successfully");
-} catch (err) {
-    console.error("Clerk initialization failed:", err);
-    process.exit(1);
-}
+// Clerk middleware
+app.use(clerkMiddleware());
+console.log("Clerk middleware initialized successfully");
 
-// 3. File Uploads
+// File uploads
 app.use(fileupload({
-    useTempFiles: true,
-    tempFileDir: '/tmp/uploads',
-    createParentPath: true,
-    limits: { fileSize: 100 * 1024 * 1024 }
+  useTempFiles: true,
+  tempFileDir: path.join(__dirname, "tmp"),
+  createParentPath: true,
+  limits: { fileSize: 100 * 1024 * 1024 }
 }));
 
-// 4. Temp File Cleanup
-cron.schedule("0 * * * *", cleanTempFiles);
-
-async function cleanTempFiles() {
-    const tempDir = '/tmp/uploads';
-    try {
-        if (fs.existsSync(tempDir)) {
-            const files = await fs.promises.readdir(tempDir);
-            await Promise.all(files.map(file => 
-                fs.promises.unlink(path.join(tempDir, file))
-            ));
-        }
-    } catch (err) {
-        console.error("Temp cleanup error:", err);
+// Scheduled temp file cleanup every hour
+cron.schedule("0 * * * *", async () => {
+  const tempDir = path.join(__dirname, "tmp");
+  try {
+    if (fs.existsSync(tempDir)) {
+      const files = await fs.promises.readdir(tempDir);
+      await Promise.all(files.map(file => fs.promises.unlink(path.join(tempDir, file))));
     }
-}
-
-// 5. Route Loading with Validation
-function loadRoutes() {
-    const routes = [
-        { path: '/api/auth', router: './routes/auth.route.js' },
-        { path: '/api/users', router: './routes/user.route.js' },
-        { path: '/api/admin', router: './routes/admin.route.js' },
-        { path: '/api/albums', router: './routes/album.route.js' },
-        { path: '/api/stats', router: './routes/stat.route.js' },
-        { path: '/api/songs', router: './routes/song.route.js' }
-    ];
-
-    routes.forEach(async (route) => {
-        try {
-            const routerModule = await import(route.router);
-            app.use(route.path, routerModule.default);
-            console.log(`Route loaded: ${route.path}`);
-        } catch (err) {
-            console.error(`Failed to load route ${route.path}:`, err);
-        }
-    });
-}
-
-// 6. Production Configuration
-if (process.env.NODE_ENV === "production") {
-    app.use(express.static(path.join(__dirname, "../client/dist")));
-    app.get("*", (req, res) => {
-        res.sendFile(path.join(__dirname, "../client/dist/index.html"));
-    });
-}
-
-// 7. Final Error Handling
-app.use((err, req, res, next) => {
-    console.error('Final Error Handler:', err);
-    res.status(500).json({ 
-        error: 'Internal Server Error',
-        ...(process.env.NODE_ENV === 'development' && { 
-            message: err.message,
-            stack: err.stack 
-        })
-    });
+  } catch (err) {
+    console.error("Temp cleanup error:", err);
+  }
 });
 
-// 8. Database Connection and Server Start
-(async () => {
-    try {
-        await connectDB();
-        loadRoutes();
-        
-        app.listen(process.env.PORT, () => {
-            console.log(`Server running on port ${process.env.PORT}`);
-            console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-        });
-    } catch (err) {
-        console.error("Server startup failed:", err);
-        process.exit(1);
-    }
-})();
+// Mount routes
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/albums', albumRoutes);
+app.use('/api/stats', statRoutes);
+app.use('/api/songs', songRoutes);
 
-export default app;
+// Serve static files in production
+if (process.env.NODE_ENV === "production") {
+  app.use(express.static(path.join(__dirname, "../client/dist")));
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(__dirname, "../client/dist/index.html"));
+  });
+}
+
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({
+    error: 'Internal Server Error',
+    ...(process.env.NODE_ENV === 'development' && { message: err.message, stack: err.stack })
+  });
+});
+
+// Async startup
+(async () => {
+  try {
+    await connectDB();
+
+    // Log all registered routes for debugging in non-production
+    if (process.env.NODE_ENV !== 'production' && app._router && app._router.stack) {
+      app._router.stack.forEach((layer) => {
+        if (layer.route) {
+          const methods = Object.keys(layer.route.methods).map(m => m.toUpperCase());
+          console.log('ROUTE:', methods, layer.route.path);
+        }
+      });
+    }
+
+    const port = process.env.PORT || 8000;
+    app.listen(port, () => {
+      console.log(`Server running on port ${port}`);
+    });
+  } catch (err) {
+    console.error("Failed to start server:", err);
+    process.exit(1);
+  }
+})();
