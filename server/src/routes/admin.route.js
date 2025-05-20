@@ -1,6 +1,6 @@
 import {Router} from 'express';
 import { protectRoute, requireAdmin } from '../../middleware/auth.middleware.js';
-import { checkAdmin, createAlbum, createSong, deleteALbum, deleteSong } from '../controller/admin.controller.js';
+import { checkAdmin, createAlbum, createSong, deleteAlbum, deleteSong } from '../controller/admin.controller.js';
 
 const router = Router();
 
@@ -10,7 +10,7 @@ router.post('/song',protectRoute,requireAdmin,createSong);
 router.delete('/song/:id',protectRoute,requireAdmin,deleteSong);
 
 router.post('/albums',protectRoute,requireAdmin,createAlbum);
-router.post('/albums/:id',protectRoute,requireAdmin,deleteALbum);
+router.delete('/albums/:id',protectRoute,requireAdmin,deleteAlbum);
 
 
 
