@@ -85,7 +85,7 @@ export const createAlbum = async(req,res) => {
     }
 }
 
-export const deleteALbum = async(req,res) => {
+export const deleteAlbum = async(req,res) => {
     try{
         const {id} = req.params;
         await Song.deleteMany({albumId:id});
